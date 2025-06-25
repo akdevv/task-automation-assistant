@@ -1,10 +1,12 @@
 import { Tool } from "./types";
 import { weatherTool } from "./weather";
+import { calculatorTool } from "./calculator";
 
 const toolsMap = new Map<string, Tool>();
 
 // Initialize with all available tools
 toolsMap.set(weatherTool.name, weatherTool);
+toolsMap.set(calculatorTool.name, calculatorTool);
 
 export const registerTool = (tool: Tool) => {
 	toolsMap.set(tool.name, tool);

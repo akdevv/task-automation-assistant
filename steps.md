@@ -319,3 +319,7 @@
 - [ ] **Caching**: Cache API responses where appropriate
 
 This guide should give you a solid roadmap to build your task automation assistant! Each step builds on the previous ones, so take your time with the foundation before moving to advanced features.
+
+
+
+* add spotify tool
