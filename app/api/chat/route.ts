@@ -12,7 +12,7 @@ export const runtime = "edge";
 
 export async function POST(req: NextRequest) {
 	try {
-		const { userMessage } = await req.json();
+		const { userMessage, uploadedFile } = await req.json();
 		if (!userMessage) {
 			return new Response(createErrorStream("Message is required"), {
 				headers: {
@@ -24,8 +24,43 @@ export async function POST(req: NextRequest) {
 		}
 
 		console.log("processing user message:", userMessage);
-		// step 1: analyze if tool is needed
-		const toolAnalysis = await analyzeToolNeeded(userMessage);
+		console.log(
+			"uploaded file:",
+			uploadedFile ? uploadedFile.name : "none"
+		);
+
+		let toolAnalysis;
+		let finalMessage = userMessage;
+
+		// If a file is uploaded, automatically use the file reader tool
+		if (uploadedFile) {
+			console.log("File uploaded, using file reader tool");
+			toolAnalysis = {
+				needsTools: true,
+				toolCalls: [
+					{
+						toolName: "filereader",
+						parameters: {
+							fileContent: uploadedFile.content,
+							fileName: uploadedFile.name,
+							fileType: uploadedFile.type,
+							action: "analyze",
+						},
+					},
+				],
+				reasoning:
+					"User uploaded a file, analyzing with file reader tool",
+			};
+
+			// Enhance the user message with file context
+			finalMessage = `${userMessage}\n\n[File uploaded: ${
+				uploadedFile.name
+			} (${Math.round(uploadedFile.size / 1024)} KB)]`;
+		} else {
+			// step 1: analyze if tool is needed
+			toolAnalysis = await analyzeToolNeeded(userMessage);
+		}
+
 		console.log("tool analysis:", toolAnalysis);
 
 		// stream res with tools
@@ -38,7 +73,7 @@ export async function POST(req: NextRequest) {
 
 			// step 3: generate streaming res with tools
 			const stream = await generateStreamingResWithTools(
-				userMessage,
+				finalMessage,
 				toolResults
 			);
 
@@ -62,7 +97,7 @@ export async function POST(req: NextRequest) {
 			console.log("No tools needed, generating normal response");
 
 			// stream res without tools
-			const stream = await generateStreamingRes(userMessage);
+			const stream = await generateStreamingRes(finalMessage);
 
 			return new Response(stream, {
 				headers: {

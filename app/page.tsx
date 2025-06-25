@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ChatInput from "@/components/chat-input";
+import ChatBubble from "@/components/chat-bubble";
+import WelcomeScreen from "@/components/welcome-screen";
 import type { Message } from "@/types/message";
 
 export default function Home() {
@@ -16,13 +18,31 @@ export default function Home() {
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const abortControllerRef = useRef<AbortController | null>(null);
 
-	const sendMessage = async (e: React.FormEvent) => {
+	const sendMessage = async (e: React.FormEvent, uploadedFile?: File) => {
 		e.preventDefault();
-		if (!input.trim() || isLoading) return;
+		if ((!input.trim() && !uploadedFile) || isLoading) return;
+
+		let messageContent = input.trim();
+
+		// Handle file upload
+		if (uploadedFile) {
+			try {
+				const fileContent = await readFileContent(uploadedFile);
+				messageContent = input.trim()
+					? `${input.trim()}\n\n[Uploaded file: ${uploadedFile.name}]`
+					: `Please analyze this file: ${uploadedFile.name}`;
+
+				// We'll send the file content to the API for processing
+			} catch (error) {
+				console.error("Error reading file:", error);
+				alert("Error reading file. Please try again.");
+				return;
+			}
+		}
 
 		const userMessage: Message = {
 			id: `user_${Date.now().toString()}`,
-			content: input,
+			content: messageContent,
 			role: "user",
 			timestamp: new Date(),
 		};
@@ -46,12 +66,25 @@ export default function Home() {
 		abortControllerRef.current = new AbortController();
 
 		try {
+			const requestBody: any = { userMessage: userMessage.content };
+
+			// Add file data if uploaded
+			if (uploadedFile) {
+				const fileContent = await readFileContent(uploadedFile);
+				requestBody.uploadedFile = {
+					name: uploadedFile.name,
+					type: uploadedFile.type,
+					content: fileContent,
+					size: uploadedFile.size,
+				};
+			}
+
 			const res = await fetch("/api/chat", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({ userMessage: userMessage.content }),
+				body: JSON.stringify(requestBody),
 				signal: abortControllerRef.current?.signal,
 			});
 
@@ -149,6 +182,15 @@ export default function Home() {
 		}
 	};
 
+	const readFileContent = (file: File): Promise<string> => {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = (e) => resolve(e.target?.result as string);
+			reader.onerror = reject;
+			reader.readAsText(file);
+		});
+	};
+
 	const stopGeneration = () => {
 		if (abortControllerRef.current) {
 			abortControllerRef.current.abort();
@@ -167,27 +209,14 @@ export default function Home() {
 			<div className="relative h-full w-full">
 				<ScrollArea className="flex-1 overflow-y-auto p-3 h-full pb-40">
 					<div className="max-w-4xl mx-auto">
-						<div className="flex flex-col gap-2">
-							{messages.map((msg) => (
-								<div key={msg.id} className="mb-4">
-									<p>Role: {msg.role}</p>
-									<p>Content: {msg.content}</p>
-									<p>
-										Timestamp:{" "}
-										{msg.timestamp.toLocaleString()}
-									</p>
-									<p>
-										Is Streaming:{" "}
-										{msg.isStreaming ? "Yes" : "No"}
-									</p>
-								</div>
-							))}
-						</div>
-						{messages.length === 0 && (
-							<div className="flex items-center justify-center h-full">
-								<p className="text-muted-foreground">
-									No messages yet. Start a conversation!
-								</p>
+						{messages.length === 0 ? (
+							<WelcomeScreen />
+						) : (
+							<div className="flex flex-col gap-2">
+								{messages.map((msg) => (
+									<ChatBubble key={msg.id} message={msg} />
+								))}
+								<div ref={messagesEndRef} />
 							</div>
 						)}
 					</div>
